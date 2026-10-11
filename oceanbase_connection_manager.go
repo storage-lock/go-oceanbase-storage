@@ -15,8 +15,11 @@ import (
 type OceanBaseConnectionManager struct {
 	DSN string
 
-	mu         sync.Mutex
-	db         *sql.DB
+	mu sync.Mutex
+	db *sql.DB
+
+	open        func(driverName, dataSourceName string) (*sql.DB, error)
+	ping        func(context.Context, *sql.DB) error
 	initialized bool
 }
 
@@ -57,7 +60,11 @@ func (x *OceanBaseConnectionManager) Take(ctx context.Context) (*sql.DB, error) 
 		return x.db, nil
 	}
 
-	db, err := sql.Open("mysql", x.DSN)
+	open := x.open
+	if open == nil {
+		open = sql.Open
+	}
+	db, err := open("mysql", x.DSN)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +74,11 @@ func (x *OceanBaseConnectionManager) Take(ctx context.Context) (*sql.DB, error) 
 	db.SetMaxIdleConns(5)
 
 	// 测试连接
-	if err := db.PingContext(ctx); err != nil {
+	ping := x.ping
+	if ping == nil {
+		ping = func(ctx context.Context, db *sql.DB) error { return db.PingContext(ctx) }
+	}
+	if err := ping(ctx, db); err != nil {
 		db.Close()
 		return nil, err
 	}

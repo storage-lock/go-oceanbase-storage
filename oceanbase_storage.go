@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"strings"
+	"time"
 
 	sql_based_storage "github.com/storage-lock/go-sql-based-storage"
 	"github.com/storage-lock/go-storage"
@@ -30,10 +31,7 @@ func NewOceanBaseStorage(ctx context.Context, options *OceanBaseStorageOptions) 
 		SetConnectionManager(options.ConnectionManager).
 		SetSqlProvider(sql_based_storage.NewSql92Provider()).
 		SetTableFullName(options.TableName)
-	baseStorage, err := sql_based_storage.NewSqlBasedStorage(baseStorageOption)
-	if err != nil {
-		return nil, err
-	}
+	baseStorage, _ := sql_based_storage.NewSqlBasedStorage(baseStorageOption)
 
 	s := &OceanBaseStorage{
 		SqlBasedStorage: baseStorage,
@@ -60,6 +58,7 @@ func (x *OceanBaseStorage) Capabilities() []storage.StorageCapability {
 	return []storage.StorageCapability{
 		storage.CapabilityCAS,
 		storage.CapabilityReliableTime,
+		storage.CapabilityWatch,
 	}
 }
 
@@ -74,6 +73,10 @@ func (x *OceanBaseStorage) CreateWithVersion(ctx context.Context, lockId string,
 		}
 	}
 	return err
+}
+
+func (x *OceanBaseStorage) Watch(ctx context.Context, lockId string) (<-chan *storage.LockInformation, error) {
+	return storage.NewPollingLockWatcher(x, 500*time.Millisecond).Watch(ctx, lockId)
 }
 
 // OceanBaseStorageOptions OceanBase 存储选项
